@@ -15,6 +15,8 @@
  * Ответ будет приходить в поле {result}
  */
  import Api from '../tools/api';
+ import { allPass, tap, length, partial, lt, pipe, lte, test, gt, applySpec, add, always, andThen, pick, prop } from 'ramda';
+
 
  const api = new Api();
 
@@ -25,27 +27,55 @@
      setTimeout(resolve, time);
  })
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
+    // writeLog
+    const writeLogFn = tap(writeLog);
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+    // validate
+    const moreTnanTwo = partial(lt, [2]);
+    const lengthMoreThanTwo = pipe(length, moreTnanTwo);
+    
+    const lessTnanTen = partial(gt, [10]);
+    const lengthLessThanTen = pipe(length, lessTnanTen);
+    
+    const moreThanZero = partial(lt, [0]);
+    const numIsMoreThanZero = pipe(Number, moreThanZero);
+    
+    const testReg = test(/^\d+(\.\d+)?$/);
+    
+    const validateFn = allPass([lengthMoreThanTwo, lengthLessThanTen, numIsMoreThanZero, testReg]);
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+    // convert
+    const convertFn = pipe(parseFloat, Math.round, String);
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+    // getObject
+    const getObject = applySpec({
+        from: always(10),
+        to: always(2),
+        number: convertFn
+    });
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+    // async query
+    const getFn = api.get('https://api.tech/numbers/base');
+    const getNumOfSymb = pipe(getObject, tap(console.log), getFn, andThen(prop('result')));
+
+
+    // BEGIN
+    writeLogFn(value);
+
+    getNumOfSymb(value).then(writeLogFn);
+
+    wait(2500).then(() => {
+        writeLog('SecondLog')
+
+        return wait(1500);
+    }).then(() => {
+        writeLog('ThirdLog');
+
+        return wait(400);
+    }).then(() => {
+        handleSuccess('Done');
+    });
+}
 
 export default processSequence;
