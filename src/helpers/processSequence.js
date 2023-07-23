@@ -15,7 +15,24 @@
  * Ответ будет приходить в поле {result}
  */
  import Api from '../tools/api';
- import { allPass, tap, length, partial, lt, pipe, lte, test, gt, applySpec, add, always, andThen, pick, prop } from 'ramda';
+ import { 
+    allPass, 
+    tap, 
+    length, 
+    partial, 
+    lt, 
+    pipe,  
+    test, 
+    gt, 
+    applySpec,  
+    always, 
+    andThen, 
+    prop, 
+    ifElse, 
+    modulo, 
+    __, 
+    partialRight 
+} from 'ramda';
 
 
  const api = new Api();
@@ -42,8 +59,6 @@ const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
     const numIsMoreThanZero = pipe(Number, moreThanZero);
     
     const testReg = test(/^\d+(\.\d+)?$/);
-    
-    const validateFn = allPass([lengthMoreThanTwo, lengthLessThanTen, numIsMoreThanZero, testReg]);
 
     // convert
     const convertFn = pipe(parseFloat, Math.round, String);
@@ -57,25 +72,52 @@ const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
 
     // async query
     const getFn = api.get('https://api.tech/numbers/base');
-    const getNumOfSymb = pipe(getObject, tap(console.log), getFn, andThen(prop('result')));
+    const getNumOfSymb = pipe(getObject, getFn, andThen(prop('result')));
 
+    // countLengthFn
+    const countLengthFn = pipe(length, writeLogFn);
+
+    // mod3Fn
+    const mod3Fn = modulo(__, 2);
+    const mod3FnPipeline = pipe(mod3Fn, writeLogFn);
+    
+    // pow2Fn
+    const pow2Fn = partialRight(Math.pow, [2]);
+    const pow2FnPipeline = pipe(pow2Fn, writeLogFn);
+
+    // stringConstructFn
+    const stringConstructFn = (id) => `https://animals.tech/${id}`;
+
+    // call animals.tech
+    const getAnimalFn = partialRight(api.get, [{}]);
+
+    const getAnimalPipeline = pipe(stringConstructFn, getAnimalFn, andThen(prop('result')), andThen(handleSuccess));
+
+    // main pipeline
+    const mainPipeline = pipe(
+        convertFn, 
+        getNumOfSymb, 
+        andThen(writeLogFn), 
+        andThen(countLengthFn),
+        andThen(pow2FnPipeline), 
+        andThen(mod3FnPipeline),
+        andThen(getAnimalPipeline)
+    );
+
+    // validateErrorFn
+    const validateErrorFn = partial(handleError, ['ValidationError']);
+
+    // validateFn
+    const validateFn = ifElse( 
+        allPass([lengthMoreThanTwo, lengthLessThanTen, numIsMoreThanZero, testReg]),
+        mainPipeline,
+        validateErrorFn
+    )
+
+    const validatePipeline = pipe(writeLogFn, validateFn);
 
     // BEGIN
-    writeLogFn(value);
-
-    getNumOfSymb(value).then(writeLogFn);
-
-    wait(2500).then(() => {
-        writeLog('SecondLog')
-
-        return wait(1500);
-    }).then(() => {
-        writeLog('ThirdLog');
-
-        return wait(400);
-    }).then(() => {
-        handleSuccess('Done');
-    });
+    validatePipeline(value);
 }
 
 export default processSequence;
